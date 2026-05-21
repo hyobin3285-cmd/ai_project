@@ -1,96 +1,94 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
+import plotly.express as px
 
-# 페이지 설정
-st.set_page_config(page_title="Global MBTI Distribution Dashboard", layout="wide")
+# 1. 페이지 설정
+st.set_page_config(page_title="글로벌 MBTI 분석기", layout="wide")
 
-st.title("🌍 전 세계 국가별 MBTI 분포 대시보드")
-st.markdown("공공 또는 연구용 MBTI 데이터셋을 기반으로 국가별 성격 유형 비율을 시각화합니다.")
+st.title("🌍 전 세계 MBTI 분포 분석 대시보드")
+st.markdown("특정 MBTI 유형을 선택하면, 해당 유형의 비율이 가장 높은 **상위 10개국**을 보여줍니다.")
 
-# 데이터 로드
+# 2. 데이터 로드 (캐싱을 통해 속도 향상)
 @st.cache_data
 def load_data():
-    try:
-        # 업로드한 파일 이름을 그대로 불러옵니다.
-        df = pd.read_csv('countriesMBTI_16types.csv')
-        return df
-    except FileNotFoundError:
-        st.error("데이터 파일('countriesMBTI_16types.csv')을 찾을 수 없습니다. GitHub 저장소에 파일이 함께 있는지 확인해주세요.")
-        return None
+    # 데이터 파일 읽기 (동일 경로에 있다고 가정)
+    df = pd.read_csv("countriesMBTI_16types.csv")
+    return df
 
-df = load_data()
-
-if df is not None:
-    # 사이드바에서 국가 선택
-    countries = sorted(df['Country'].unique())
-    selected_country = st.sidebar.selectbox("📊 분석할 국가를 선택하세요:", countries)
-
-    # 선택된 국가의 데이터 추출
-    country_data = df[df['Country'] == selected_country].iloc[0]
+try:
+    df = load_data()
     
-    # MBTI 유형과 비율 추출 (Country 열 제외)
-    mbti_types = df.columns[1:]
-    percentages = [country_data[mbti] * 100 for mbti in mbti_types]  # 백분율(%)로 변환
+    # MBTI 컬럼 목록 가져오기 (Country 제외)
+    mbti_columns = [col for col in df.columns if col != 'Country']
 
-    # 데이터프레임으로 변환 후 비율이 높은 순서대로 정렬
-    plot_df = pd.DataFrame({
-        'MBTI': mbti_types,
-        'Percentage': percentages
-    }).sort_values(by='Percentage', ascending=False).reset_index(drop=True)
+    # 3. 사이드바 - MBTI 유형 선택
+    selected_mbti = st.sidebar.selectbox(
+        "🧐 궁금한 MBTI 유형을 선택하세요:",
+        options=sorted(mbti_columns)
+    )
 
-    # 1등 및 나머지 색상 계산 (1등: 빨간색, 나머지: 파란색 그라데이션)
-    colors = []
-    n_items = len(plot_df)
+    # 4. 데이터 가공: 선택한 MBTI 기준 상위 10개국 추출
+    # 퍼센트 표시를 위해 100을 곱해줍니다.
+    df_filtered = df[['Country', selected_mbti]].copy()
+    df_filtered[selected_mbti] = df_filtered[selected_mbti] * 100
     
-    for i in range(n_items):
-        if i == 0:
-            # 1등: 세련되고 명확한 고급스러운 빨간색
-            colors.append('#D32F2F')
-        else:
-            # 나머지: 순위가 내려갈수록(비율이 낮아질수록) 점차 연해지는 파란색 그라데이션
-            alpha = 1.0 - (i / n_items) * 0.6  # 최소 투명도 0.4까지 조절
-            colors.append(f'rgba(41, 128, 185, {alpha})')
+    # 상위 10개국 정렬 (내림차순)
+    top10 = df_filtered.sort_values(by=selected_mbti, ascending=False).head(10)
+    
+    # 그래프 순서를 위해 역순 정렬 (Plotly 세로 막대그래프는 위에서부터 그리므로 정렬 유지)
+    top10 = top10.iloc[::-1]
 
-    # 플로틀리(Plotly) 인터랙티브 막대그래프 구성
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=plot_df['MBTI'],
-        y=plot_df['Percentage'],
-        marker_color=colors,
-        text=[f"{val:.2f}%" for val in plot_df['Percentage']],
-        textposition='auto',
-        hovertemplate='<b>%{x}</b><br>비율: %{y:.2f}%<extra></extra>',
-    ))
+    # 5. 시각화 (Plotly)
+    # 1등은 빨간색, 나머지는 파란색 그라데이션을 표현하기 위해 커스텀 컬러 순서 생성
+    # 가장 높은 값(1등)이 그라데이션의 끝(빨간색)에 오도록 매핑합니다.
+    # Plotly Continuous Color에서는 값의 스케일에 따라 색이 바뀝니다.
+    
+    # 커스텀 컬러 스케일 정의: 0(최저) ~ 0.8까지는 파란색 그라데이션, 1.0(최고)은 빨간색
+    custom_colors = [
+        [0.0, "#d1e5f0"],  # 연한 파랑
+        [0.8, "#045a8d"],  # 진한 파랑 (2등 수준)
+        [1.0, "#d73027"]   # 빨간색 (1등)
+    ]
 
-    # 차트 레이아웃 스타일링
+    fig = px.bar(
+        top10,
+        x=selected_mbti,
+        y='Country',
+        orientation='h',  # 가로 막대 그래프가 가독성이 좋습니다
+        title=f"🏆 {selected_mbti} 비율이 가장 높은 국가 Top 10",
+        labels={selected_mbti: "비율 (%)", "Country": "국가"},
+        color=selected_mbti,
+        color_continuous_scale=custom_colors,
+        text_auto='.2f'  # 막대 위에 소수점 둘째 자리까지 표시
+    )
+
+    # 레이아웃 깔끔하게 다듬기
     fig.update_layout(
-        title=f"📊 {selected_country}의 MBTI 성격 유형 분포 (1위 강조)",
-        xaxis_title="MBTI 유형",
-        yaxis_title="비율 (%)",
-        yaxis=dict(ticksuffix="%"),
-        margin=dict(l=40, r=40, t=60, b=40),
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor="white",
+        xaxis=dict(showgrid=True, gridcolor="#eeeeee"),
+        yaxis=dict(autorange="reversed"), # 1등이 맨 위로 오도록 설정
+        coloraxis_showscale=False, # 컬러바 숨기기 (깔끔함 유지)
+        title_font_size=20,
+        height=500
     )
     
-    fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(200, 200, 200, 0.3)')
+    fig.update_traces(
+        textposition="outside", 
+        cliponaxis=False
+    )
 
-    # 화면 레이아웃 분할 (좌측: 그래프, 우측: 주요 요약 정보 카드)
-    col1, col2 = st.columns([2, 1])
+    # 6. 스트림릿 화면에 출력
+    st.plotly_chart(fig, use_container_width=True)
     
-    with col1:
-        st.plotly_chart(fig, use_container_width=True)
-        
-    with col2:
-        st.subheader(f"💡 {selected_country} 요약 정보")
-        top_1 = plot_df.iloc[0]
-        top_2 = plot_df.iloc[1]
-        top_3 = plot_df.iloc[2]
-        
-        st.metric(label="🥇 가장 많은 유형 (1위)", value=f"{top_1['MBTI']}", delta=f"{top_1['Percentage']:.2f}%")
-        st.metric(label="🥈 2위 유형", value=f"{top_2['MBTI']}", delta=f"{top_2['Percentage']:.2f}%")
-        st.metric(label="🥉 3위 유형", value=f"{top_3['MBTI']}", delta=f"{top_3['Percentage']:.2f}%")
-        
-        with st.expander("전체 비율 데이터 테이블 보기"):
-            st.dataframe(plot_df.style.format({'Percentage': '{:.2f}%'}), use_container_width=True)
+    # 데이터 테이블도 하단에 깔끔하게 보여주기
+    st.markdown("### 📊 상세 데이터 테이블")
+    st.dataframe(
+        top10.iloc[::-1].rename(columns={selected_mbti: f"{selected_mbti} 비율 (%)"}),
+        use_container_width=True,
+        hide_index=True
+    )
+
+except FileNotFoundError:
+    st.error("❌ `countriesMBTI_16types.csv` 파일을 찾을 수 없습니다. 코드와 같은 폴더에 넣어주세요.")
+except Exception as e:
+    st.error(f"오류가 발생했습니다: {e}")
