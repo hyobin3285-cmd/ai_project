@@ -16,7 +16,6 @@ def load_korean_font():
 
 try:
     font_prop = load_korean_font()
-    # 매트플롯립 전역 폰트 설정 적용
     fm.fontManager.addfont('NanumGothic.ttf')
     plt.rcParams['font.family'] = font_prop.get_name()
 except Exception as e:
@@ -42,26 +41,29 @@ if uploaded_file is not None:
     # 선택된 행정구역 행 추출
     region_data = df[df['행정구역'] == selected_region].iloc[0]
     
-    # 가로축에 사용할 연령대 컬럼 정의 (0~9세부터 100세 이상까지)
+    # 가로축에 사용할 연령대 컬럼 정의
     age_columns = ['0~9세', '10~19세', '20~29세', '30~39세', '40~49세', '50~59세', '60~69세', '70~79세', '80~89세', '90~99세', '100세 이상']
     
-    # 콤마(,) 제거 후 정수형(int)으로 인구 데이터 파싱
+    # 안전하게 정수형 데이터로 변환 (결측치 및 에러 방지)
     populations = []
     for col in age_columns:
-        val = str(region_data[col]).replace(',', '')
-        populations.append(int(val))
+        try:
+            val = str(region_data[col]).replace(',', '').strip()
+            populations.append(int(pd.to_numeric(val, errors='coerce')) if val else 0)
+        except:
+            populations.append(0)
         
     # 3. 꺾은선 그래프 시각화 설정
     fig, ax = plt.subplots(figsize=(10, 5))
     
-    # 4. 그래프 바탕색 설정 (연한 노란색: Light Yellow)
-    fig.patch.set_facecolor('#FFFFE0') # 전체 도화지 배경색
-    ax.set_facecolor('#FFFFE0')        # 그래프 플롯 내부 배경색
+    # 4. 그래프 바탕색 설정 (연한 노란색)
+    fig.patch.set_facecolor('#FFFFE0') 
+    ax.set_facecolor('#FFFFE0')        
     
-    # 4. 그래프 선 및 마커 설정 (빨간색: Red)
+    # 4. 그래프 선 및 마커 설정 (빨간색)
     ax.plot(age_columns, populations, marker='o', color='red', linewidth=2.5, markersize=6)
     
-    # 3. 그래프 제목 및 레이블 지정 (한글 가독성 확보)
+    # 3. 그래프 제목 및 레이블 지정
     font_title = font_prop.copy()
     font_title.set_size(16)
     font_title.set_weight('bold')
@@ -79,7 +81,7 @@ if uploaded_file is not None:
     for label in ax.get_yticklabels():
         label.set_fontproperties(font_prop)
         
-    # 세로축 숫자 포맷팅 (천단위 쉼표 추가 ex: 10,000)
+    # 세로축 숫자 포맷팅 (천단위 쉼표 추가)
     ax.get_yaxis().set_major_formatter(plt.FuncFormatter(lambda x, loc: "{:,}".format(int(x))))
     
     # 스트림릿 웹 화면에 그래프 표출
