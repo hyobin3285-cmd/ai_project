@@ -4,3 +4,4 @@ streamlit-folium>=0.18.0
 pandas
 plotly
 numpy
+matplotlib
