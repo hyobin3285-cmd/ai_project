@@ -77,7 +77,6 @@ else:
     
     # 사이드바 예측 실행 버튼
     if st.sidebar.button("미래 기온 예측하기"):
-        # Scikit-learn의 선형 회귀 모델 활용
         X = filtered_df[['연도']].values
         y_high = filtered_df['최고기온'].values
         y_low = filtered_df['최저기온'].values
@@ -95,10 +94,56 @@ else:
         st.sidebar.metric(label="예측 최고기온", value=f"{pred_high:.1f} ℃")
         st.sidebar.metric(label="예측 최저기온", value=f"{pred_low:.1f} ℃")
         
-        # 예측 데이터 가상 프레임 생성 후 기존 데이터에 병합하여 그래프에 표시
+        # 예측 데이터를 기존 데이터프레임에 결합하여 그래프에 표시
         pred_row = pd.DataFrame({
             '연도': [target_year], '월': [selected_month], '일': [selected_day],
             '최고기온': [round(pred_high, 1)], '최저기온': [round(pred_low, 1)]
         })
         plot_df = pd.concat([filtered_df, pred_row]).sort_values('연도')
     else:
+        plot_df = filtered_df
+
+    # ==========================================
+    # 4. Plotly 인터랙티브 꺾은선 그래프
+    # ==========================================
+    fig = go.Figure()
+    
+    # 최고기온 선 (핑크)
+    fig.add_trace(go.Scatter(
+        x=plot_df['연도'], 
+        y=plot_df['최고기온'],
+        mode='lines+markers',
+        name='최고기온',
+        line=dict(color='pink', width=2),
+        marker=dict(size=6),
+        hovertemplate='<b>연도</b>: %{x}년<br><b>최고기온</b>: %{y}°C<extra></extra>'
+    ))
+    
+    # 최저기온 선 (하늘색)
+    fig.add_trace(go.Scatter(
+        x=plot_df['연도'], 
+        y=plot_df['최저기온'],
+        mode='lines+markers',
+        name='최저기온',
+        line=dict(color='skyblue', width=2),
+        marker=dict(size=6),
+        hovertemplate='<b>연도</b>: %{x}년<br><b>최저기온</b>: %{y}°C<extra></extra>'
+    ))
+    
+    # 레이아웃 및 축 설정
+    fig.update_layout(
+        title=dict(text="날짜별 기온분석", x=0.5, font=dict(size=18)),
+        xaxis=dict(title="연도", tickmode='linear', dtick=10, tickangle=45),
+        yaxis=dict(title="온도"),
+        hovermode="x unified", 
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        margin=dict(l=40, r=40, t=80, b=40),
+        template="plotly_white"
+    )
+    
+    # 스트림릿 웹 화면에 그래프 출력
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # 데이터 테이블 보기
+    if st.checkbox("데이터 표 형태로 보기"):
+        st.dataframe(plot_df[['연도', '최고기온', '최저기온']].reset_index(drop=True), use_container_width=True)
